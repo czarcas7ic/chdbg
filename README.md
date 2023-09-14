@@ -1,8 +1,8 @@
 # chdbg
 
 Based on:
-[chdbg (fork of)](https://github.com/orijtech/chdbg)
-[`iavlviewer`](https://github.com/cosmos/iavl/tree/master/cmd/iaviewer):
+- [chdbg (fork of)](https://github.com/orijtech/chdbg)
+- [`iavlviewer`](https://github.com/cosmos/iavl/tree/master/cmd/iaviewer):
 
 ```bash
 go run github.com/orijtech/chdbg ../application_math2.db ..
