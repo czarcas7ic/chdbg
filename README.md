@@ -1,28 +1,24 @@
 # chdbg
-Command `chdbg` is a debugger for determining the root cause of a Cosmos chain halt.
-Its initial release can analyze two databases and output their differences. As an
-example, here's the output when run on the example directories from
+
+Based on:
+[chdbg (fork of)](https://github.com/orijtech/chdbg)
 [`iavlviewer`](https://github.com/cosmos/iavl/tree/master/cmd/iaviewer):
 
-```
-go run github.com/orijtech/chdbg bns-a.db bns-b.db
-chdbg: hash mismatch: 96AAD58DBDF2BA87D90BE1F620E80AC3D1662B5113A7667B51303596163A5969 != 56E581EBD9C0A3D726A91579839F7FF8A9251BEB063FDF0FA0415A0B3429DF6E
-chdbg: key _i.bchnft_owner:4C97A7423B1782D7C8CAB362247B848DEC96B1EC: key proofs differ
-chdbg: key _i.bchnft_owner:E28AE9A6EB94FC88B73EB7CBD6B87BF93EB9BEF0: key proofs differ
-chdbg: key _i.tkrnft_owner:E28AE9A6EB94FC88B73EB7CBD6B87BF93EB9BEF0: key proofs differ
-chdbg: key _i.usrnft_chainaddr:1152542575310734325L;da3ed6a45429278bac2666961289ca17ad86595d33b31037615d4b8e8f158bba: key proofs differ
-chdbg: key _i.usrnft_chainaddr:12256717727036376470L;da3ed6a45429278bac2666961289ca17ad86595d33b31037615d4b8e8f158bba: key proofs differ
-chdbg: key _i.usrnft_chainaddr:14285752342776807606L;da3ed6a45429278bac2666961289ca17ad86595d33b31037615d4b8e8f158bba: key proofs differ
-chdbg: key _i.usrnft_chainaddr:177168082075485743L;da3ed6a45429278bac2666961289ca17ad86595d33b31037615d4b8e8f158bba: key proofs differ
-chdbg: key _i.usrnft_chainaddr:2980033962229439650L;da3ed6a45429278bac2666961289ca17ad86595d33b31037615d4b8e8f158bba: key proofs differ
-chdbg: key _i.usrnft_chainaddr:3070406526139113375L;da3ed6a45429278bac2666961289ca17ad86595d33b31037615d4b8e8f158bba: key proofs differ
-chdbg: key _i.usrnft_chainaddr:8565302995323734695L;da3ed6a45429278bac2666961289ca17ad86595d33b31037615d4b8e8f158bba: key proofs differ
-chdgb: ... (additional diffs omitted)
-chdbg: database mismatch at version 190258 with 88 differences
-exit status 2
-```
+```bash
+go run github.com/orijtech/chdbg ../application_math2.db ..
+/application_v192.db 11317300 
+chdbg: hash mismatch: 2381605E1374EE6F71F3F7BCECF6AE98B24C445A830C23B30424F1BE3E5DA7F4 != 28416BB9D35C766372F701B998B58927757B828E02E1D982167B7181D03C28EE
+chdbg: key 2067616D6D2F706F6F6C2F3830362F7375706572756E626F6E64696E672F6F736D6F76616C6F706572316C3338373933636A6A6B73396B3730776B7864713777336175686A6D71753973396C346E6A792F6E6F64652F000000044C1FF2520000: value mismatch
+chdbg: value a 
+�R100000000000000
+, value b 
 
-It is expected that the tool will develop to cover more chain halt causes.
+
+L�R1000000000000000
+```
+- Debugger configuration for vscode exists in `.vscode/launch.json`
+
+Debugging guide: https://app.clickup.com/37420681/v/dc/13nzm9-23133/13nzm9-46933
 
 # LICENSE
 Copyright Cosmos Network Authors. All Rights Reserved.

@@ -21,27 +21,37 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
-	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/iavl"
+	tmdb "github.com/tendermint/tm-db"
 )
 
 func main() {
 	flag.Parse()
 
-	if flag.NArg() != 2 {
+	if flag.NArg() != 3 {
 		fmt.Fprintf(os.Stderr, "chdbg: exactly two directories must be specified\n")
 		os.Exit(2)
 	}
-	if err := diff(flag.Arg(0), flag.Arg(1)); err != nil {
+	if err := diff(flag.Arg(0), flag.Arg(1), flag.Arg(2)); err != nil {
 		fmt.Fprintf(os.Stderr, "chdbg: %v\n", err)
 		os.Exit(2)
 	}
 }
 
-func diff(dbdir1, dbdir2 string) error {
-	trees := make([]*iavl.MutableTree, 2)
+func diff(dbdir1, dbdir2, height string) error {
+	var (
+		t1 *iavl.MutableTree
+		t2 *iavl.MutableTree
+	)
+
+	heightNum, err := strconv.Atoi(height)
+	if err != nil {
+		return err
+	}
+
 	for i, dir := range []string{dbdir1, dbdir2} {
 		db, err := openDB(dir)
 		if err != nil {
@@ -54,119 +64,125 @@ func diff(dbdir1, dbdir2 string) error {
 		if err != nil {
 			return fmt.Errorf("%s: %w", dir, err)
 		}
-		if _, err := tree.LoadVersion(0); err != nil {
+		if _, err := tree.LoadVersion(int64(heightNum)); err != nil {
 			return fmt.Errorf("%s: %w", dir, err)
 		}
-		trees[i] = tree
+		if i == 0 {
+			t1 = tree
+		} else {
+			t2 = tree
+		}
 	}
-	t1, t2 := trees[0], trees[1]
-	versions1, versions2 := t1.AvailableVersions(), t2.AvailableVersions()
-	if len(versions1) == 0 {
-		return fmt.Errorf("%s is empty", dbdir1)
+
+	imt1, err := t1.GetImmutable(int64(heightNum))
+	if err != nil {
+		return err
 	}
-	if len(versions2) == 0 {
-		return fmt.Errorf("%s is empty", dbdir2)
+	it1, err := imt1.Iterator(nil, nil, true)
+	if err != nil {
+		return err
 	}
-	min := versions1[0]
-	if min2 := versions2[0]; min2 > min {
-		min = min2
+	imt2, err := t2.GetImmutable(int64(heightNum))
+	if err != nil {
+		return err
 	}
-	max := versions1[len(versions1)-1]
-	if max2 := versions2[len(versions2)-1]; max2 < max {
-		max = max2
+	it2, err := imt2.Iterator(nil, nil, true)
+	if err != nil {
+		return err
 	}
-	for ver := min; ver <= max; ver++ {
-		imt1, err := t1.GetImmutable(int64(ver))
-		if err != nil {
-			return err
-		}
-		it1, err := imt1.Iterator(nil, nil, true)
-		if err != nil {
-			return err
-		}
-		imt2, err := t2.GetImmutable(int64(ver))
-		if err != nil {
-			return err
-		}
-		it2, err := imt2.Iterator(nil, nil, true)
-		if err != nil {
-			return err
-		}
-		h1, err := imt1.Hash()
-		if err != nil {
-			return err
-		}
-		h2, err := imt2.Hash()
-		if err != nil {
-			return err
-		}
-		diff := !bytes.Equal(h1, h2)
-		if diff {
-			fmt.Printf("chdbg: hash mismatch: %X != %X\n", h1, h2)
-		}
-		reports := 0
-		reportf := func(format string, args ...any) {
-			reports++
-			const max = 10
-			if reports > max {
-				if reports == max+1 {
-					fmt.Fprintf(os.Stderr, "chdgb: ... (additional diffs omitted)\n")
-				}
-				return
+	h1, err := imt1.Hash()
+	if err != nil {
+		return err
+	}
+	h2, err := imt2.Hash()
+	if err != nil {
+		return err
+	}
+	diff := !bytes.Equal(h1, h2)
+	if diff {
+		fmt.Printf("chdbg: hash mismatch: %X != %X\n", h1, h2)
+	}
+	reports := 0
+	reportf := func(format string, args ...any) {
+		reports++
+		const max = 10
+		if reports > max {
+			if reports == max+1 {
+				fmt.Fprintf(os.Stderr, "chdgb: ... (additional diffs omitted)\n")
 			}
-			fmt.Fprintf(os.Stderr, "chdbg: "+format, args...)
+			return
 		}
-	loop:
-		for {
-			switch {
-			case it1.Valid() && it2.Valid():
-				k1, v1 := it1.Key(), it1.Value()
-				k2, v2 := it2.Key(), it2.Value()
-				cmp := bytes.Compare(k1, k2)
-				switch cmp {
-				case -1:
-					it1.Next()
-					reportf("%s: missing key %s\n", dbdir2, parseWeaveKey(k1))
-				case +1:
-					it2.Next()
-					reportf("%s: missing key %s\n", dbdir1, parseWeaveKey(k2))
-				default:
-					it1.Next()
-					it2.Next()
-					eq := bytes.Equal(v1, v2)
-					if !eq {
-						reportf("key %s: value mismatch\n", parseWeaveKey(k1))
-					} else {
-						proof1, err := imt1.GetProof(k1)
-						if err != nil {
-							return err
-						}
-						ok, err := imt2.VerifyProof(proof1, k1)
-						if err != nil {
-							return err
-						}
-						if !ok {
-							reportf("key %s: key proofs differ\n", parseWeaveKey(k1))
-						}
-					}
-				}
-			case it1.Valid():
+		fmt.Fprintf(os.Stderr, "chdbg: "+format, args...)
+	}
+loop:
+	for {
+		switch {
+		case it1.Valid() && it2.Valid():
+			k1, v1 := it1.Key(), it1.Value()
+			k2, v2 := it2.Key(), it2.Value()
+			cmp := bytes.Compare(k1, k2)
+			switch cmp {
+			case -1:
 				it1.Next()
-				k1 := it1.Key()
 				reportf("%s: missing key %s\n", dbdir2, parseWeaveKey(k1))
-			case it2.Valid():
+			case +1:
 				it2.Next()
-				k2 := it2.Key()
 				reportf("%s: missing key %s\n", dbdir1, parseWeaveKey(k2))
 			default:
-				break loop
+				it1.Next()
+				it2.Next()
+				eq := bytes.Equal(v1, v2)
+				if !eq {
+					reportf("key %s: value mismatch\n", parseWeaveKey(k1))
+
+					reportf("value a \n%s\n, value b \n%s\n\n\n", v1, v2)
+				} else {
+					// // This returns either membership or non-membership proof
+					proof1, err := imt1.GetProof(k1)
+					// if err != nil {
+					// 	return err
+					// }
+
+					// ok, err := imt2.VerifyProof(proof1, k1)
+					// if err != nil {
+					// 	return err
+					// }
+					// if !ok {
+					// 	reportf("key %s: key proofs differ\n", parseWeaveKey(k1))
+					// }
+
+					// The strategy below helps to print the exact values that got mismatched instead of log keys
+					// in the whole branch where hashes differred.
+
+					// If proof1 is membership proof -> return false
+					// if proof1 is a non-membership proof and valid -> return true
+					// if proof1 is a non-membership proof and failed verifying -> return true
+					ok, err := imt2.VerifyNonMembership(proof1, k1)
+					if err != nil {
+						return err
+					}
+					if ok {
+						reportf("proofs failed\n", parseWeaveKey(k1))
+						reportf("value a \n%s\n, value b \n%s\n\n\n", v1, v2)
+					}
+				}
 			}
+		case it1.Valid():
+			it1.Next()
+			k1 := it1.Key()
+			reportf("%s: missing key %s\n", dbdir2, parseWeaveKey(k1))
+		case it2.Valid():
+			it2.Next()
+			k2 := it2.Key()
+			reportf("%s: missing key %s\n", dbdir1, parseWeaveKey(k2))
+		default:
+			break loop
 		}
-		it1.Close()
-		it2.Close()
-		if diff {
-			return fmt.Errorf("database mismatch at version %d with %d differences", ver, reports)
-		}
+	}
+	it1.Close()
+	it2.Close()
+	if diff {
+		return fmt.Errorf("database mismatch at version %d with %d differences", heightNum, reports)
 	}
 	return nil
 }
@@ -193,7 +209,7 @@ func encodeID(id []byte) string {
 	return string(id)
 }
 
-func openDB(dir string) (dbm.DB, error) {
+func openDB(dir string) (tmdb.DB, error) {
 	dir, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, err
@@ -206,5 +222,11 @@ func openDB(dir string) (dbm.DB, error) {
 
 	name := filepath.Base(dir)
 	parent := filepath.Dir(dir)
-	return dbm.NewGoLevelDB(name, parent, nil)
+
+	db, err := tmdb.NewGoLevelDB(name, parent)
+	if err != nil {
+		return nil, err
+	}
+
+	return tmdb.NewPrefixDB(db, []byte("s/k:lockup/")), nil
 }
