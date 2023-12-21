@@ -24,8 +24,9 @@ import (
 	"strconv"
 	"strings"
 
+	"cosmossdk.io/log"
+	tmdb "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/iavl"
-	tmdb "github.com/tendermint/tm-db"
 )
 
 func main() {
@@ -60,7 +61,7 @@ func diff(dbdir1, dbdir2, height string) error {
 		defer db.Close()
 		// Match iavlviewer.
 		const cacheSize = 10000
-		tree, err := iavl.NewMutableTree(db, cacheSize, false)
+		tree := iavl.NewMutableTree(db, cacheSize, false, log.NewNopLogger())
 		if err != nil {
 			return fmt.Errorf("%s: %w", dir, err)
 		}
@@ -90,11 +91,11 @@ func diff(dbdir1, dbdir2, height string) error {
 	if err != nil {
 		return err
 	}
-	h1, err := imt1.Hash()
+	h1 := imt1.Hash()
 	if err != nil {
 		return err
 	}
-	h2, err := imt2.Hash()
+	h2 := imt2.Hash()
 	if err != nil {
 		return err
 	}
@@ -223,7 +224,7 @@ func openDB(dir string) (tmdb.DB, error) {
 	name := filepath.Base(dir)
 	parent := filepath.Dir(dir)
 
-	db, err := tmdb.NewGoLevelDB(name, parent)
+	db, err := tmdb.NewGoLevelDB(name, parent, nil)
 	if err != nil {
 		return nil, err
 	}
