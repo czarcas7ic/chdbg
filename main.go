@@ -24,8 +24,8 @@ import (
 	"strconv"
 	"strings"
 
+	tmdb "github.com/cometbft/cometbft-db"
 	"github.com/cosmos/iavl"
-	tmdb "github.com/tendermint/tm-db"
 )
 
 func main() {
